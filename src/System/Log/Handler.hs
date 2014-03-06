@@ -42,7 +42,7 @@ class LogHandler a where
                    getFormatter h = nullFormatter
                    -- | Logs an event if it meets the requirements
                    -- given by the most recent call to 'setLevel'.
-                   handle :: a -> LogRecord -> String-> IO ()
+                   handle :: a -> LogRecord -> String -> IO ()
 
                    handle h (pri, msg) logname = 
                        if pri >= (getLevel h)

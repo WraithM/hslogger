@@ -264,12 +264,13 @@ componentsOfName name =
 
 {- | Log a message using the given logger at a given priority. -}
 
-logM :: String                           -- ^ Name of the logger to use
+logM :: MonadIO m
+     => String                           -- ^ Name of the logger to use
      -> Priority                         -- ^ Priority of this message
      -> String                           -- ^ The log text itself
-     -> IO ()
+     -> m ()
 
-logM logname pri msg = do
+logM logname pri msg = liftIO $ do
                        l <- getLogger logname
                        logL l pri msg
 
@@ -278,51 +279,59 @@ logM logname pri msg = do
 ---------------------------------------------------------------------------
 
 {- | Log a message at 'DEBUG' priority -}
-debugM :: String                         -- ^ Logger name
+debugM :: MonadIO m 
+      => String                         -- ^ Logger name
       -> String                         -- ^ Log message
-      -> IO ()
+      -> m ()
 debugM s = logM s DEBUG
 
 {- | Log a message at 'INFO' priority -}
-infoM :: String                         -- ^ Logger name
+infoM :: MonadIO m
+      => String                         -- ^ Logger name
       -> String                         -- ^ Log message
-      -> IO ()
+      -> m ()
 infoM s = logM s INFO
 
 {- | Log a message at 'NOTICE' priority -}
-noticeM :: String                         -- ^ Logger name
+noticeM :: MonadIO m
+      => String                         -- ^ Logger name
       -> String                         -- ^ Log message
-      -> IO ()
+      -> m ()
 noticeM s = logM s NOTICE
 
 {- | Log a message at 'WARNING' priority -}
-warningM :: String                         -- ^ Logger name
+warningM :: MonadIO m
+      => String                         -- ^ Logger name
       -> String                         -- ^ Log message
-      -> IO ()
+      -> m ()
 warningM s = logM s WARNING
 
 {- | Log a message at 'ERROR' priority -}
-errorM :: String                         -- ^ Logger name
+errorM :: MonadIO m
+      => String                         -- ^ Logger name
       -> String                         -- ^ Log message
-      -> IO ()
+      -> m ()
 errorM s = logM s ERROR
 
 {- | Log a message at 'CRITICAL' priority -}
-criticalM :: String                         -- ^ Logger name
+criticalM :: MonadIO m
+      => String                         -- ^ Logger name
       -> String                         -- ^ Log message
-      -> IO ()
+      -> m ()
 criticalM s = logM s CRITICAL
 
 {- | Log a message at 'ALERT' priority -}
-alertM :: String                         -- ^ Logger name
+alertM :: MonadIO m
+      => String                         -- ^ Logger name
       -> String                         -- ^ Log message
-      -> IO ()
+      -> m ()
 alertM s = logM s ALERT
 
 {- | Log a message at 'EMERGENCY' priority -}
-emergencyM :: String                         -- ^ Logger name
+emergencyM :: MonadIO m
+      => String                         -- ^ Logger name
       -> String                         -- ^ Log message
-      -> IO ()
+      -> m ()
 emergencyM s = logM s EMERGENCY
 
 ---------------------------------------------------------------------------
@@ -333,8 +342,8 @@ emergencyM s = logM s EMERGENCY
 -- exists, creates new loggers and any necessary parent loggers, with
 -- no connected handlers.
 
-getLogger :: String -> IO Logger
-getLogger lname = modifyMVar logTree $ \lt ->
+getLogger :: MonadIO m => String -> m Logger
+getLogger lname = liftIO $ modifyMVar logTree $ \lt ->
     case Map.lookup lname lt of
          Just x ->  return (lt, x) -- A logger exists; return it and leave tree
          Nothing -> do
@@ -353,12 +362,12 @@ getLogger lname = modifyMVar logTree $ \lt ->
 
 -- | Returns the root logger.
 
-getRootLogger :: IO Logger
+getRootLogger :: MonadIO m => m Logger
 getRootLogger = getLogger rootLoggerName
 
 -- | Log a message, assuming the current logger's level permits it.
-logL :: Logger -> Priority -> String -> IO ()
-logL l pri msg = handle l (pri, msg)
+logL :: MonadIO m => Logger -> Priority -> String -> m ()
+logL l pri msg = liftIO $ handle l (pri, msg)
 
 -- | Handle a log request.
 handle :: Logger -> LogRecord -> IO ()
@@ -433,8 +442,8 @@ clearLevel l = l {level = Nothing}
 -- | Updates the global record for the given logger to take into
 -- account any changes you may have made.
 
-saveGlobalLogger :: Logger -> IO ()
-saveGlobalLogger l = modifyMVar_ logTree 
+saveGlobalLogger :: MonadIO m => Logger -> m ()
+saveGlobalLogger l = liftIO $ modifyMVar_ logTree 
                      (\lt -> return $ Map.insert (name l) l lt)
 
 {- | Helps you make changes on the given logger.  Takes a function
@@ -445,16 +454,17 @@ database.  Here's an example from above (\"s\" is a 'LogHandler'):
 >                    (setLevel DEBUG . setHandlers [s])
 -}
 
-updateGlobalLogger :: String            -- ^ Logger name
+updateGlobalLogger :: MonadIO m
+                      => String            -- ^ Logger name
                       -> (Logger -> Logger) -- ^ Function to call
-                      -> IO ()
+                      -> m ()
 updateGlobalLogger ln func =
     do l <- getLogger ln
        saveGlobalLogger (func l)
 
 -- | Allow gracefull shutdown. Release all opened files/handlers/etc.
-removeAllHandlers :: IO ()
-removeAllHandlers =
+removeAllHandlers :: MonadIO m => m ()
+removeAllHandlers = liftIO $
     modifyMVar_ logTree $ \lt -> do
         let allHandlers = Map.fold (\l r -> concat [r, handlers l]) [] lt
         mapM_ (\(HandlerT h) -> close h) allHandlers
